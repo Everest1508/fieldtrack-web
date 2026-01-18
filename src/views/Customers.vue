@@ -31,8 +31,8 @@
 						<p class="text-muted mb-0">{{ record.company }}</p>
 					</div>
 				</template>
-				<template slot="created_by" slot-scope="user">
-					{{ user ? `${user.first_name} ${user.last_name}` : '-' }}
+				<template slot="created_by" slot-scope="text, record">
+					{{ record.created_by_name || text || '-' }}
 				</template>
 				<template slot="created_at" slot-scope="date">
 					{{ formatDate(date) }}

@@ -5,7 +5,7 @@
 			<a-col class="col-content" :span="24" :xl="12">
 				<div class="card-content">
 					<h6>Built by developers</h6>
-					<h5>Muse Dashboard for Ant Design</h5>
+					<h5>Field Pro Dashboard</h5>
 					<p>From colors, cards, typography to complex elements, you will find the full documentation.</p>
 				</div>
 				<div class="card-footer">

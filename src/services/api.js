@@ -2,7 +2,7 @@ import axios from 'axios'
 
 // Create axios instance
 const api = axios.create({
-  baseURL: 'https://apifieldtrack.pythonanywhere.com/api',
+  baseURL: 'http://localhost:8000/api',
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
@@ -152,8 +152,12 @@ export const crmAPI = {
   getSystemNotifications: (params = {}) => {
     return api.get('/system-notifications/', { params })
   },
+  // REMOVED: getSystemNotificationsUnreadCount - unread count is now calculated locally
+  // This function is kept for backward compatibility but should not be called
   getSystemNotificationsUnreadCount: () => {
-    return api.get('/system-notifications/unread_count/')
+    console.warn('⚠️ DEPRECATED: getSystemNotificationsUnreadCount() should not be called. Unread count is calculated locally.')
+    // Return a promise that resolves to 0 to prevent errors if old cached code calls it
+    return Promise.resolve({ data: { unread_count: 0 } })
   },
   markSystemNotificationRead: (id) => {
     return api.post(`/system-notifications/${id}/mark_read/`)

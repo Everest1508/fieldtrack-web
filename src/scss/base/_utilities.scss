@@ -3,6 +3,8 @@
 // Template's utility classes and helpers.
 // 
 
+@use "./_variables" as *;
+
 // Base Colors
 $colors: (
 	"primary": $color-primary,

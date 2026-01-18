@@ -3,6 +3,8 @@
 // Template's basic typography configurations.
 // 
 
+@use "./_variables" as *;
+
 body {
     font-family: $f-family;
     letter-spacing: -.3px;

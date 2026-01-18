@@ -167,6 +167,7 @@
 				loadingNotifications: false,
 				unreadCount: 0,
 				markingAllRead: false,
+				notificationsLoaded: false, // Track if notifications have been loaded
 			}
 		},
 		computed: {
@@ -174,16 +175,6 @@
 				// Show button if notifications are supported and permission is not granted
 				const isSupported = messagingService.isSupported()
 				const notGranted = this.notificationPermission !== 'granted'
-				console.log('Show notification button check:', { isSupported, notGranted, permission: this.notificationPermission })
-				return isSupported && notGranted
-			}
-		},
-		computed: {
-			showNotificationButton() {
-				// Show button if notifications are supported and permission is not granted
-				const isSupported = messagingService.isSupported()
-				const notGranted = this.notificationPermission !== 'granted'
-				console.log('Show notification button check:', { isSupported, notGranted, permission: this.notificationPermission })
 				return isSupported && notGranted
 			}
 		},
@@ -255,6 +246,19 @@
 				}
 			},
 			async loadSystemNotifications() {
+				// Prevent duplicate calls - use global flag to prevent multiple component instances
+				if (this.loadingNotifications || this.notificationsLoaded || window.__notificationsLoading) {
+					console.log('Skipping duplicate notification load:', {
+						loadingNotifications: this.loadingNotifications,
+						notificationsLoaded: this.notificationsLoaded,
+						globalLoading: window.__notificationsLoading
+					})
+					return
+				}
+				
+				console.log('Loading system notifications (ONCE on page load)')
+				// Set global flag to prevent concurrent calls
+				window.__notificationsLoading = true
 				this.loadingNotifications = true
 				try {
 					const response = await crmAPI.getSystemNotifications({ page_size: 10 })
@@ -264,27 +268,15 @@
 						this.systemNotifications = response.data.slice(0, 10)
 					}
 					
-					// Update unread count
-					this.updateUnreadCount()
+					// Calculate unread count from loaded notifications (NO separate API call)
+					this.unreadCount = this.systemNotifications.filter(n => !n.is_read).length
+					this.notificationsLoaded = true
+					console.log('Notifications loaded successfully. Unread count:', this.unreadCount)
 				} catch (error) {
 					console.error('Error loading system notifications:', error)
 				} finally {
 					this.loadingNotifications = false
-				}
-			},
-			async updateUnreadCount() {
-				try {
-					const response = await crmAPI.getSystemNotificationsUnreadCount()
-					if (response.data && response.data.unread_count !== undefined) {
-						this.unreadCount = response.data.unread_count
-					} else {
-						// Fallback: count unread from loaded notifications
-						this.unreadCount = this.systemNotifications.filter(n => !n.is_read).length
-					}
-				} catch (error) {
-					console.error('Error getting unread count:', error)
-					// Fallback: count unread from loaded notifications
-					this.unreadCount = this.systemNotifications.filter(n => !n.is_read).length
+					window.__notificationsLoading = false
 				}
 			},
 			async handleNotificationClick(notification) {
@@ -292,7 +284,8 @@
 					try {
 						await crmAPI.markSystemNotificationRead(notification.id)
 						notification.is_read = true
-						this.updateUnreadCount()
+						// Update unread count locally (no API call needed)
+						this.unreadCount = this.systemNotifications.filter(n => !n.is_read).length
 					} catch (error) {
 						console.error('Error marking notification as read:', error)
 					}
@@ -311,6 +304,7 @@
 					this.systemNotifications.forEach(n => {
 						n.is_read = true
 					})
+					// Update unread count locally (no API call needed)
 					this.unreadCount = 0
 					this.$message.success('All notifications marked as read')
 				} catch (error) {
@@ -372,23 +366,33 @@
 			this.wrapper = document.getElementById('layout-dashboard') ;
 			// Check notification permission status
 			this.checkNotificationPermission()
-			// Load system notifications
-			this.loadSystemNotifications()
-			// Refresh notifications every 30 seconds
-			this.notificationInterval = setInterval(() => {
-				this.loadSystemNotifications()
-			}, 30000)
 			
-			// Listen for system notification events from FCM
-			window.addEventListener('system-notification-received', () => {
-				// Refresh notifications when a new one is received
+			// Load system notifications only once globally (prevent duplicate calls from multiple instances)
+			if (!window.__notificationsLoaded) {
 				this.loadSystemNotifications()
-			})
+				window.__notificationsLoaded = true
+			} else {
+				// If already loaded elsewhere, just get the data from storage or skip
+				this.notificationsLoaded = true
+			}
+			
+			// Listen for system notification events from FCM (only register once globally)
+			if (!window.__fcmNotificationHandlerRegistered) {
+				this.fcmNotificationHandler = () => {
+					// Refresh notifications when a new one is received via FCM
+					// Reset flags to allow reloading
+					window.__notificationsLoaded = false
+					this.notificationsLoaded = false
+					this.loadSystemNotifications()
+				}
+				window.addEventListener('system-notification-received', this.fcmNotificationHandler)
+				window.__fcmNotificationHandlerRegistered = true
+			}
 		},
 		beforeDestroy() {
-			// Clear interval when component is destroyed
-			if (this.notificationInterval) {
-				clearInterval(this.notificationInterval)
+			// Remove event listener to prevent memory leaks
+			if (this.fcmNotificationHandler) {
+				window.removeEventListener('system-notification-received', this.fcmNotificationHandler)
 			}
 		},
 		created() {
